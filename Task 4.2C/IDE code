@@ -1,0 +1,82 @@
+// Task4.2C with Ultrasonic Sensor (Arduino Nano 33 IoT)
+
+const int buttonPin = 2;   // Push button
+const int trigPin   = 4;   // Ultrasonic TRIG
+const int echoPin   = 3;   // Ultrasonic ECHO (interrupt pin)
+const int led1 = 9;
+const int led2 = 10;
+
+volatile bool led1State = LOW;
+volatile bool distanceMeasured = false;
+
+unsigned long echoStart = 0;
+unsigned long echoEnd = 0;
+float distance = 0;
+
+// ISR for button
+void buttonISR() {
+  led1State = !led1State;
+  digitalWrite(led1, led1State);
+  Serial.println("Button interrupt: LED1 toggled");
+}
+
+// ISR for ultrasonic ECHO
+void echoISR() {
+  if (digitalRead(echoPin) == HIGH) {
+    // Rising edge: record start time
+    echoStart = micros();
+  } else {
+    // Falling edge: record end time
+    echoEnd = micros();
+    distanceMeasured = true;  // flag to process in loop()
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(led1, OUTPUT);
+  pinMode(led2, OUTPUT);
+
+  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  attachInterrupt(digitalPinToInterrupt(buttonPin), buttonISR, FALLING);
+  attachInterrupt(digitalPinToInterrupt(echoPin), echoISR, CHANGE);
+
+  Serial.println("System ready: Press button or move object for ultrasonic.");
+}
+
+void loop() {
+  // Send trigger pulse every 200ms
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  delay(200);
+
+  // Check if a distance was measured
+  if (distanceMeasured) {
+    noInterrupts();
+    unsigned long duration = echoEnd - echoStart;
+    distanceMeasured = false;
+    interrupts();
+
+    distance = duration * 0.034 / 2;  // cm
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+
+    // Example action: toggle LED2 if object < 20 cm
+    if (distance < 20.0) {
+      digitalWrite(led2, HIGH);
+      Serial.println("Object close: LED2 ON");
+    } else {
+      digitalWrite(led2, LOW);
+      Serial.println("Object far: LED2 OFF");
+    }
+  }
+}
